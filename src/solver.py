@@ -1,6 +1,8 @@
+from ast import excepthandler
 from http import client
 import math
 import random
+from copy import deepcopy
 
 
 def distance(p1, p2):
@@ -13,12 +15,20 @@ def distance(p1, p2):
 def rindex(k):
     return random.randint(0,k-1)
 
+def shallow_copy(routes):
+    copy = { rid : route.copy() for rid, route in routes.items() }
+    return copy
+
+def shallow_copy2(routes):
+    copy = { a : b for a,b in routes.items() }
+
 class Solver:
-    def __init__(self, clients_loc, clients_demand, routes, max_capacity) -> None:
+    def __init__(self, clients_loc, clients_demand, routes, max_capacity, depot) -> None:
         # problema specification fields
         self.clients_loc = clients_loc
         self.clients_demand = clients_demand
         self.max_capacity = max_capacity
+        self.depot = depot
         
         # solution specification fields
         self.routes = routes
@@ -31,6 +41,20 @@ class Solver:
         self.current_route = -1
         self.selected_clients = []
         self.operations = []
+        self.backup = None
+        self.not_valid = False
+    
+    def backup_solution(self):
+        self.routes_backup = shallow_copy(self.routes)
+        self.routes_cost_backup = self.routes_cost.copy()
+        self.routes_capacity_backup = self.routes_capacity.copy()
+    
+    def load_backup(self):
+        self.not_valid=False
+        self.routes = shallow_copy(self.routes_backup)
+        self.routes_cost = self.routes_cost_backup.copy()
+        self.routes_capacity = self.routes_capacity_backup.copy()
+
 
     def register_operation(self, op):
         self.operations.append(op)
@@ -39,16 +63,24 @@ class Solver:
         self.operations = []
 
     def compute_solution(self):
+        self.not_valid = False
+        self.selected_clients = []
         for op in self.operations:
-            op()
+            try:
+                op()
+            except:
+                self.not_valid = True
+                return
 
     def compute_route_cost(self, route):
         cost = 0
+        if not route:
+            return 0
         for i in range(1, len(route)):
             c1 = route[i]
             c2 = route[i-1]
             cost += distance(self.clients_loc[c1], self.clients_loc[c2])
-        return cost
+        return cost + distance(self.clients_loc[route[0]], self.depot) + distance(self.clients_loc[route[len(route)-1]], self.depot)
 
     def compute_route_capacity(self, route):
         capacity = self.max_capacity
@@ -57,13 +89,12 @@ class Solver:
         return capacity
     
     def add_client_to_route(self, idr, idc, index=None):
+        # print(f"adding clinet {idc} to route {idr} at index {index}")
         route = self.routes[idr]
-        index = index if index else len(route)
-        prev = route[index-1] if index > 0 else None
-        next = route[index+1] if index < len(route) - 1 else None
-        route.insert(idc, index+1)
-        self.routes_cost[idr] += distance(self.clients_loc[prev], self.clients_loc[idc])
-        self.routes_cost[idr] += distance(self.clients_loc[idc], self.clients_loc[next])
+        if index is None or index > len(route):
+            index = len(route)-1
+        route.insert(index+1, idc)
+
         self.routes_capacity[idr] -= self.clients_demand[idc]
 
     # Route selection operation and filters
@@ -75,10 +106,10 @@ class Solver:
         self.current_route = random.choice(list(rid for rid in self.routes if self.routes[rid]))
 
     def select_route_min_cost(self):
-        self.current_route = sorted(self.routes_cost.items(), lambda x: x[1])[0][0]
+        self.current_route = sorted(self.routes_cost.items(), key=lambda x: x[1])[0][0]
     
     def select_route_max_cost(self):
-        self.current_route = sorted(self.routes_cost.items(), lambda x: x[1], reverse=True)[0][0]
+        self.current_route = sorted(self.routes_cost.items(), key=lambda x: x[1], reverse=True)[0][0]
     
     def select_route_min_capacity(self):
         self.current_route = sorted(self.routes_capacity.items(), key=lambda x: x[1])[0][0]
@@ -96,11 +127,11 @@ class Solver:
         best_cost = float('inf')
         best_index = None
         for i, idc in enumerate(route):
-            prev = route[i-1] if i > 0 else None
-            next = route[i+1] if i < len(route) - 1 else None
+            prev = self.clients_loc[route[i-1]] if i > 0 else self.depot
+            next = self.clients_loc[route[i+1]] if i < len(route) - 1 else self.depot
             new_cost = self.routes_cost[self.current_route]
-            new_cost -= distance(self.clients_loc[prev], self.clients_loc[idc]) + distance(self.clients_loc[idc], self.clients_loc[next])
-            new_cost += distance(self.clients_loc[prev], self.clients_loc[next])
+            new_cost -= distance(prev, self.clients_loc[idc]) + distance(self.clients_loc[idc], next)
+            new_cost += distance(prev, next)
             best_cost = min(best_cost, new_cost)
             if best_cost == new_cost:
                 best_index = i
@@ -109,17 +140,16 @@ class Solver:
 
     def remove_client_from_route(self, index=None):
         route = self.routes[self.current_route]
-        if not index:
-            index = rindex(len(route))
+        if not route:
+            return
 
-        prev = index - 1 if index > 0 else None
-        next = index + 1 if index < len(route) - 1 else None 
+        if not index or index > len(route):
+            index = rindex(len(route))
+            
         client = route.pop(index)
-        self.routes_cost[self.current_route] -= distance(self.clients_loc[prev], self.clients_loc[client]) + distance(self.clients_loc[client], self.clients_loc[next])
-        self.routes_cost[self.current_route] += distance(self.clients_loc[prev], self.clients_loc[next])
         self.routes_capacity[self.current_route] += self.clients_demand[client]
 
-        self.selected_clients.append((client, route, index))
+        self.selected_clients.append((client, self.current_route, index))
     
     def exchange_clients(self):
         client1, route1, index1 = self.selected_clients.pop(rindex(len(self.selected_clients)))
@@ -137,7 +167,23 @@ class Solver:
         rid = random.choice(list(idr for idr in self.routes if self.routes_capacity[idr] > self.clients_demand[client]))
         self.add_client_to_route(rid, client)
     
-    
+    def solution_cost(self):
+        if self.not_valid:
+            return 100000000000000
+
+        if sum(len(route) for route in self.routes.values()) < 32:
+            print(True)
+            return 1000000000000000
+
+        if all(capacity >= 0 for capacity in self.routes_capacity.values()):
+            s = 0
+            for idr, route in self.routes.items():
+                cost = self.compute_route_cost(route)
+                self.routes_cost[idr] = cost
+                s += cost
+            return s
+        else:
+            return 100000000000000
 
     
 

@@ -43,6 +43,11 @@ class frSymbol(TerminalSymbol):
         self.filter = random.randint(1,5)
         super().__init__(f'[fr_{self.filter}]')
 
+class foSymbol(TerminalSymbol):
+    def __init__(self) -> None:
+        self.filter = 1
+        super().__init__(f'[fb_{self.filter}]')
+
 class NonTerminalSymbol(Symbol):
     def __init__(self) -> None:
         self.is_non_terminal = True
@@ -113,7 +118,7 @@ class BSymbol(NonTerminalSymbol):
         self.productions = [self.p1, self.p2]
 
     def p1(self):
-        return []
+        return [bSymbol()]
     
     def p2(self):
         return [fbSymbol()]
