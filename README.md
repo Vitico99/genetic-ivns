@@ -6,9 +6,9 @@ Autores:
 
 ## Introducción
 
-El Problema de enrutamiento de Vehículos (VRP) es un problema de optimización combinatoria que consiste en planificar recorridos que permitan satisfacer las demandas de un conjunto de clientes geográficamente dispersos. Para ello se cuenta con una flota de vehículos que parten desde uno o varios depósitos centrales. El objetivo de VRP es diseañar rutas para cada vehículo que minimicen o maximicen algún objetivo. Existen múltiples variantes del VRP aunque este proyecto se centra en el Problema de Enrutamiento de Vehículos con Capacidades (CVRP) en el cual cada vehículo tiene una capacidad de carga limitada.
+El Problema de Enrutamiento de Vehículos (VRP) es un problema de optimización combinatoria que consiste en planificar recorridos que permitan satisfacer las demandas de un conjunto de clientes geográficamente dispersos. Para ello se cuenta con una flota de vehículos que parten desde uno o varios depósitos centrales. El objetivo de VRP es diseñar rutas para cada vehículo que minimicen o maximicen algún objetivo. Existen múltiples variantes del VRP aunque este proyecto se centra en el Problema de Enrutamiento de Vehículos con Capacidades (CVRP) en el cual cada vehículo tiene una capacidad de carga limitada.
 
-Estos problemas al ser NP-duros no permiten la utilización de métodos exactos para instancias de grandes dimensiones, por lo que se utilizan algoritmos de aproximación basados en heurísticas y metaheurísticas para solucionarlos. En 2017 se define el algortimo Búsqueda de Vecindad Infinitamente Variable (IVNS) el cual es una extensión del ampliamente utilizado algoritmo Búsqueda de Vecindad Variable (VNS). 
+Estos problemas al ser NP-duros no permiten la utilización de métodos exactos para instancias de grandes dimensiones, por lo que se utilizan algoritmos de aproximación basados en heurísticas y metaheurísticas para solucionarlos. En 2017 se define el algoritmo Búsqueda de Vecindad Infinitamente Variable (IVNS) el cual es una extensión del ampliamente utilizado algoritmo Búsqueda de Vecindad Variable (VNS) [2]. 
 
 Estos algoritmos forman parte de los denominados algoritmos de búsqueda local en los cuales se define una solución actual, una estructura de entorno y de manera iterativa se generan soluciones vecinas de la solución actual utilizando la estructura de entorno (criterio de vecindad). El VNS realiza este procedimiento utilizando un conjunto finito de estructuras de entorno y el IVNS extiende este proceso utilizando una gramática que permite generar infinitas estructuras de entorno para ser utilizadas en la búsqueda. La implementación de IVNS descrita utiliza técnicas de compilación para generar código ejecutable para cada estructura de entorno, en este trabajo proponemos un enfoque de implementación utilizando programación orientada a objetos que permite evitar la generación de código definiendo una estructura genérica capaz de implementar todas las posibles estructuras de entorno generadas por la gramática.
 
@@ -29,7 +29,7 @@ while not CondicionesDeParada do:
 
 ### Generación de criterios de vecindad
 
-La carácterística propia de IVNS es la generación de estructuras de entorno creadas por las instrucciones `V(x) = GenerarEstructuraDeEntorno()`. Para generar infinitas estructuras nos basamos en la gramática definida en [1] para definir una jerarquía de clases que representan los símbolos de la gramática.
+La característica propia de IVNS es la generación de estructuras de entorno creadas por las instrucciones `V(x) = GenerarEstructuraDeEntorno()`. Para generar infinitas estructuras nos basamos en la gramática definida en [2] para implementar una jerarquía de clases que representan los símbolos de la gramática.
 
 Primeramente definimos los elementos generales de la gramática:
 ```python
@@ -114,9 +114,9 @@ Expande(s):
             Expande(s')
 ```
 
-Una hipótesis es que este algoritmo de expansión puediese ser mejorado para generar criterios que sean más probables de generar buenas soluciones utilizando una muestra de criterios que obtenga buenos resultados y hallar la distribución de las producciones en dicha muestra. Otra mejora es definiendo funciones de costo para las producciones para definir restricciones sobre que producciones son utilizadas.
+Una hipótesis es que este algoritmo de expansión pudiese ser mejorado para generar criterios que sean más probables de generar buenas soluciones utilizando una muestra de criterios que obtenga buenos resultados y hallar la distribución de las producciones en dicha muestra. Otra mejora es definiendo funciones de costo para las producciones para definir restricciones sobre que producciones son utilizadas.
 
-Este algoritmo fue implementado utilizando un patrón visitor que se encarga de visitar cada nodo y expandir recursivamente hasta llegar a un terminal, una consideración importante a tener en cuenta es la generación de un ciclo infinito ya que la gramática es recursiva por lo que incorporamos un parámetro `h` el cual es la profundidad máxima de generación recursiva, la distibución utilizada fue uniforme por tanto toda producción tiene la misma probabilidad de ser aplicada.
+Este algoritmo fue implementado utilizando un patrón `visitor` que se encarga de visitar cada nodo y expandir recursivamente hasta llegar a un terminal, una consideración importante a tener en cuenta es la generación de un ciclo infinito ya que la gramática es recursiva por lo que incorporamos un parámetro `h` el cual es la profundidad máxima de generación recursiva, la distribución utilizada fue uniforme por tanto toda producción tiene la misma probabilidad de ser aplicada.
 
 ```python
 # src/rexpand.py
@@ -154,9 +154,10 @@ Una vez ejecutada la expansión tenemos un criterio de vecindad válido.
 
 ### Ejecución de criterios
 
-Para la ejecución de los criterios definimos una clase llamada `solver`, solver recibe como parámetros estructuras de datos que definen el problema.
+Para la ejecución de los criterios definimos una clase llamada `Solver`, `Solver` recibe como parámetros estructuras de datos que definen el problema.
 
 ```python
+#src/solver.py
 class Solver:
     def __init__(self, clients_loc, clients_demand, routes, max_capacity, depot) -> None:
         pass
@@ -174,7 +175,7 @@ class Solver:
 Luego realizamos distintas implementaciones de las operaciones definidas por la gramática, a continuación brindamos un ejemplo para la operación de seleccionar una ruta.
 
 ```python
-
+# src/solver.py
 # Route selection operation and filters
 
     def select_route_random(self):
@@ -217,7 +218,7 @@ class Solver:
         self.operations = []
 ```
 
-Entonces podemos utilizar el método `register_operation` para crear el criterio a nuestra conveniencia, de nuevo utilizando un patrón visitor recorremos el AST y utilizamos `register_operation` para construir el criterio, a continuación mostramos su uso para construir el filtro de selección de rutas.
+Entonces podemos utilizar el método `register_operation` para crear el criterio a nuestra conveniencia, de nuevo utilizando un patrón `visitor` recorremos el AST y utilizamos `register_operation` para construir el criterio, a continuación mostramos su uso para construir el filtro de selección de rutas.
 
 ```python
 # src/build_criteria.py
@@ -240,7 +241,11 @@ Una vez terminamos de construir el criterio solo queda recorrer la lista `operat
 
 ## Resultados y consideraciones
 
-El mejor resultado obtenido fue de 795.3896893727342 luego de generar 100000 soluciones.
+El mejor resultado obtenido fue de 795.3896893727342 luego de generar 100000 soluciones. Para ejecutar 
+
+> time python3 src/main.py
+
+![](./img/best.png)
 
 Entre los factores que consideramos influyen en este resultado están:
 
@@ -251,6 +256,8 @@ El punto 1 se puede solucionar con la implementación de nuevos métodos de expl
 
 Esta implementación es una prueba de concepto y no es una implementación optimizada por lo que a continuación planteamos ciertas líneas generales para una mejor implementación.
 
+![](./img/time.png)
+
 1. Utilizar un lenguaje de alto rendimiento orientado a objetos como C++ u Objective-C dado que Python es un lenguaje poco eficiente.
 2. Realizar un estudio de las distintas variaciones de VRP para definir una interfaz y jerarquía de clases entre los `Solvers` de los distintos problemas ya que mediante herencia se pueden reutilizar soluciones a otros problemas.
 3. Utilizar estructuras de datos para filtrar dinámicamente, por ejemplo mantener el costo y capacidad de las rutas en un heap para poder utilizar los filtros en $\Omicron (\log n)$ 
@@ -260,5 +267,11 @@ Entre las ventajas de este enfoque para la implementación podemos destacar que:
 - Evita generación de código, el cual es un proceso que implica generar el código y luego compilarlo para ejecutarlo haciendo la ejecución del algoritmo más lenta.
 - Un generador de código es más difícil de mantener y debuggear que una solución sin generación.
 - Nuestra solución permite un aprovechamiento al máximo de las características de la POO para reutilizar código entre distintas clases de VRP
+
+## Bibliografía
+
+1. J. H. Dantzig, G. B.; Ramser. The truck dispatching problem. Management Science, 6, 10 1959.
+
+2. Camila Pérez Mosquera. Primeras aproximaciones a la Búsqueda de Vecindad Infinitamente Variable. Trabajo de diploma. MATCOM, Universidad de La Habana. 2017.
 
 
